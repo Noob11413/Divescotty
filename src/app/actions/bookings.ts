@@ -323,7 +323,11 @@ export async function updateBookingStatus(formData: FormData) {
     paid_at: string | null;
     fuel_cost_cents: number;
     tank_cost_cents: number;
+    tank_qty: number;
+    tank_unit_cost_cents: number;
     gear_cost_cents: number;
+    gear_qty: number;
+    gear_unit_cost_cents: number;
     other_cost_cents: number;
     instructor_hours: number;
     instructor_payout_cents: number;

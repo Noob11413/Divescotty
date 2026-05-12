@@ -1,7 +1,11 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import type { Database } from "./database.types";
 
+/**
+ * Typed as `any` until `npm run supabase:types` overwrites `database.types.ts`.
+ * postgrest-js 2.104+ treats hand-maintained `Database` as incompatible with its
+ * `GenericSchema` constraints, which collapses query results to `never`.
+ */
 export async function createClient() {
   const cookieStore = await cookies();
   type CookieToSet = {
@@ -10,7 +14,8 @@ export async function createClient() {
     options?: Parameters<typeof cookieStore.set>[2];
   };
 
-  return createServerClient<Database>(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- see module comment above
+  return createServerClient<any, "public", any>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -25,7 +30,7 @@ export async function createClient() {
             );
           } catch {
             // The `setAll` method was called from a Server Component.
-            // This can be ignored if you have middleware refreshing
+            // This can be ignored if the middleware is refreshing
             // user sessions.
           }
         },

@@ -18,19 +18,19 @@ export type ActivityWithRelations = Activity & {
   locations: Pick<Location, "slug" | "name">[];
 };
 
-export async function getCategories() {
+export async function getCategories(): Promise<Category[]> {
   const supabase = await createClient();
   const scoped = await supabase
     .from("categories")
     .select("*")
     .is("deleted_at", null)
     .order("sort_order");
-  if (!scoped.error) return scoped.data ?? [];
+  if (!scoped.error) return (scoped.data ?? []) as Category[];
 
   // Backward-compat for databases that have not run the soft-delete migration yet.
   const fallback = await supabase.from("categories").select("*").order("sort_order");
   if (fallback.error) throw fallback.error;
-  return fallback.data ?? [];
+  return (fallback.data ?? []) as Category[];
 }
 
 export type NavSubcategory = {

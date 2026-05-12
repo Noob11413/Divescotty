@@ -5,6 +5,15 @@ import { formatPricePHP } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
+function categoryLabel(category: unknown): string {
+  if (category == null) return "—";
+  if (Array.isArray(category)) {
+    const first = category[0] as { name?: string } | undefined;
+    return first?.name ?? "—";
+  }
+  return (category as { name?: string }).name ?? "—";
+}
+
 export default async function AdminActivitiesPage() {
   const supabase = await createClient();
   const { data: rows } = await supabase
@@ -52,11 +61,7 @@ export default async function AdminActivitiesPage() {
                   <div className="font-medium">{row.name}</div>
                   <div className="text-xs text-base-content/60">/{row.slug}</div>
                 </td>
-                <td>
-                  {Array.isArray(row.category)
-                    ? row.category[0]?.name ?? "—"
-                    : row.category?.name ?? "—"}
-                </td>
+                <td>{categoryLabel(row.category)}</td>
                 <td>{formatPricePHP(row.price_cents)}</td>
                 <td>{row.is_published ? "Yes" : "No"}</td>
                 <td>{row.is_featured ? "Yes" : "No"}</td>
