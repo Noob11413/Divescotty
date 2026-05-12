@@ -1,0 +1,171 @@
+@import "tailwindcss";
+@plugin "daisyui" {
+  themes: false;
+  logs: false;
+}
+
+/* ── Abyss (dark, default) ─────────────────────────────────────────────────
+   Pulled from Scotty's logo: matte black base, Scotty red action accent,
+   reef-teal supporting accent, off-white text. Sharp 0-radius buttons.
+*/
+@plugin "daisyui/theme" {
+  name: "abyss";
+  default: true;
+  prefersdark: true;
+  color-scheme: dark;
+
+  --color-base-100: oklch(15% 0.005 240);
+  --color-base-200: oklch(11% 0.004 240);
+  --color-base-300: oklch(8% 0.003 240);
+  --color-base-content: oklch(96% 0.005 240);
+
+  --color-primary: oklch(58% 0.21 25);
+  --color-primary-content: oklch(98% 0 0);
+
+  --color-secondary: oklch(78% 0.13 185);
+  --color-secondary-content: oklch(15% 0.02 220);
+
+  --color-accent: oklch(98% 0 0);
+  --color-accent-content: oklch(15% 0.005 240);
+
+  --color-neutral: oklch(20% 0.005 240);
+  --color-neutral-content: oklch(96% 0.005 240);
+
+  --color-info: oklch(74% 0.12 220);
+  --color-info-content: oklch(15% 0.02 220);
+
+  --color-success: oklch(72% 0.18 150);
+  --color-success-content: oklch(15% 0.02 150);
+
+  --color-warning: oklch(82% 0.16 85);
+  --color-warning-content: oklch(20% 0.02 85);
+
+  --color-error: oklch(64% 0.22 25);
+  --color-error-content: oklch(98% 0 0);
+
+  --radius-selector: 0;
+  --radius-field: 0;
+  --radius-box: 0.125rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+/* ── scotty-light (admin-only) ────────────────────────────────────────────── */
+@plugin "daisyui/theme" {
+  name: "scotty-light";
+  default: false;
+  prefersdark: false;
+  color-scheme: light;
+
+  --color-base-100: oklch(99% 0.002 240);
+  --color-base-200: oklch(97% 0.003 240);
+  --color-base-300: oklch(93% 0.005 240);
+  --color-base-content: oklch(20% 0.005 240);
+
+  --color-primary: oklch(58% 0.21 25);
+  --color-primary-content: oklch(98% 0 0);
+
+  --color-secondary: oklch(60% 0.13 185);
+  --color-secondary-content: oklch(98% 0 0);
+
+  --color-accent: oklch(20% 0.005 240);
+  --color-accent-content: oklch(98% 0 0);
+
+  --color-neutral: oklch(15% 0.005 240);
+  --color-neutral-content: oklch(98% 0 0);
+
+  --radius-selector: 0;
+  --radius-field: 0.125rem;
+  --radius-box: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+/* ── Custom font CSS variables (set in src/app/layout.tsx via next/font) ── */
+@theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-display), "Bebas Neue", "Anton", ui-sans-serif,
+    system-ui, sans-serif;
+}
+
+/* ── Base resets / global polish ────────────────────────────────────────── */
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background-color: var(--color-primary);
+  color: var(--color-primary-content);
+}
+
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: 0.02em;
+}
+
+/* Display headline scale used across hero/spotlight sections */
+.h-display {
+  font-family: var(--font-display);
+  letter-spacing: 0.01em;
+  line-height: 0.92;
+  text-transform: uppercase;
+  font-weight: 400;
+}
+
+/* Subtle uppercase eyebrow used above section headlines */
+.eyebrow {
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: color-mix(in oklch, var(--color-base-content) 65%, transparent);
+}
+
+/* "Tagline chip" pinned in the corners of full-bleed sections */
+.tagline-chip {
+  font-family: var(--font-sans);
+  font-size: 0.625rem;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  font-weight: 600;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid color-mix(in oklch, var(--color-base-content) 40%, transparent);
+  background: color-mix(in oklch, var(--color-base-100) 35%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+/* Marquee animation used by MarqueeStripe */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+.animate-marquee {
+  animation: marquee 40s linear infinite;
+}
+
+/* Scroll cue arrow (animated bounce) */
+@keyframes scroll-cue {
+  0%, 100% { transform: translateY(0); opacity: 1; }
+  50%      { transform: translateY(6px); opacity: 0.4; }
+}
+
+.animate-scroll-cue {
+  animation: scroll-cue 1.8s ease-in-out infinite;
+}
+
+/* Hide scrollbar utility for marquees */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
