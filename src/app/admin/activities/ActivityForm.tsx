@@ -64,7 +64,11 @@ export function ActivityForm({
   );
 
   return (
-    <form action={formAction} className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+    <form
+      action={formAction}
+      encType="multipart/form-data"
+      className="grid grid-cols-1 gap-6 lg:grid-cols-2"
+    >
       {activity?.id && <input type="hidden" name="id" value={activity.id} />}
       <input
         type="hidden"
@@ -132,12 +136,7 @@ export function ActivityForm({
         </select>
       </label>
 
-      <Field
-        label="Image URL"
-        name="imageUrl"
-        defaultValue={activity?.image_url ?? ""}
-        placeholder="/media/scuba.jpg or https://…"
-      />
+      <ActivityImageField currentValue={activity?.image_url ?? null} />
 
       <Field
         label="Short description"
@@ -289,6 +288,32 @@ export function ActivityForm({
         )}
       </div>
     </form>
+  );
+}
+
+function ActivityImageField({
+  currentValue,
+}: {
+  currentValue: string | null;
+}) {
+  return (
+    <label className="flex flex-col gap-2">
+      <span className="text-[10px] uppercase tracking-[0.32em] text-base-content/60">
+        Image (PNG/JPEG)
+      </span>
+      <input type="hidden" name="image_current" value={currentValue ?? ""} />
+      <input
+        type="file"
+        name="image_file"
+        accept="image/png,image/jpeg"
+        className="file-input file-input-bordered bg-base-100"
+      />
+      {currentValue && (
+        <span className="truncate text-xs text-base-content/60">
+          Current image saved — upload a new file to replace it
+        </span>
+      )}
+    </label>
   );
 }
 

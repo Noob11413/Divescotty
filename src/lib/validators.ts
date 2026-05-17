@@ -106,7 +106,19 @@ export const activityFormSchema = z.object({
   pricePhp: z.coerce.number().min(0).optional(),
   minParty: z.coerce.number().int().min(PARTY_SIZE_MIN).max(PARTY_SIZE_MAX).default(PARTY_SIZE_MIN),
   maxParty: z.coerce.number().int().min(PARTY_SIZE_MIN).max(PARTY_SIZE_MAX).default(PARTY_SIZE_MAX),
-  imageUrl: z.string().url().optional().or(z.literal("")),
+  imageUrl: z
+    .string()
+    .max(5_000_000)
+    .refine(
+      (v) =>
+        v === "" ||
+        v.startsWith("data:image/") ||
+        v.startsWith("/") ||
+        z.string().url().safeParse(v).success,
+      "Invalid image",
+    )
+    .optional()
+    .or(z.literal("")),
   availabilityStart: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a valid start date")

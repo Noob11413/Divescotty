@@ -1,3 +1,4 @@
+import { isActivityAvailabilityActive } from "@/lib/activity-availability";
 import { createClient } from "@/lib/supabase/server";
 import type {
   Activity,
@@ -175,8 +176,11 @@ export async function getFeaturedActivities(limit = 6) {
     .limit(limit);
   if (error) throw error;
   const rows = (data as unknown as RawActivityRow[] | null)?.map(flattenActivity) ?? [];
-  rows.sort(sortActivitiesForCatalog);
-  return rows;
+  const active = rows.filter((row) =>
+    isActivityAvailabilityActive(row.availability_label),
+  );
+  active.sort(sortActivitiesForCatalog);
+  return active;
 }
 
 export async function getActivitiesByCategorySlug(categorySlug: string) {

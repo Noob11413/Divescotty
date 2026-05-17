@@ -41,12 +41,12 @@ async function getHeroImageValue(
 
   const allowed = new Set(["image/png", "image/jpeg"]);
   if (!allowed.has(entry.type)) {
-    throw new Error("Hero image must be PNG or JPEG.");
+    throw new Error("Image must be PNG or JPEG.");
   }
 
   const maxBytes = 3 * 1024 * 1024;
   if (entry.size > maxBytes) {
-    throw new Error("Hero image must be 3MB or smaller.");
+    throw new Error("Image must be 3MB or smaller.");
   }
 
   const bytes = Buffer.from(await entry.arrayBuffer());
@@ -57,6 +57,16 @@ export async function upsertActivity(
   _prev: ActivityActionState,
   formData: FormData,
 ): Promise<ActivityActionState> {
+  let imageUrl: string | null;
+  try {
+    imageUrl = await getHeroImageValue(formData, "image_file", "image_current");
+  } catch (err) {
+    return {
+      ok: false,
+      formError: err instanceof Error ? err.message : "Image upload failed",
+    };
+  }
+
   const raw = {
     id: (formData.get("id") as string | null) || undefined,
     slug: String(formData.get("slug") ?? ""),
@@ -71,7 +81,7 @@ export async function upsertActivity(
     pricePhp: formData.get("pricePhp") ? Number(formData.get("pricePhp")) : undefined,
     minParty: Number(formData.get("minParty") ?? 1),
     maxParty: Number(formData.get("maxParty") ?? 20),
-    imageUrl: (formData.get("imageUrl") as string | null) ?? "",
+    imageUrl: imageUrl ?? "",
     availabilityStart: (formData.get("availabilityStart") as string | null) ?? "",
     availabilityEnd: (formData.get("availabilityEnd") as string | null) ?? "",
     isPublished: formData.get("isPublished") === "on",
