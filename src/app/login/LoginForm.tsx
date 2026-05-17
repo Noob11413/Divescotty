@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { Loader2 } from "lucide-react";
 import { loginAction, type LoginState } from "@/app/actions/auth";
+import { AdminAlert } from "@/components/ui/AdminAlert";
 
 const initialState: LoginState = {};
 
@@ -16,11 +17,9 @@ export function LoginForm({ redirect }: { redirect: string }) {
     <form action={formAction} className="flex flex-col gap-5">
       <input type="hidden" name="redirect" value={redirect} />
 
-      {state?.formError && (
-        <div className="border border-error/40 bg-error/10 p-3 text-sm text-error">
-          {state.formError}
-        </div>
-      )}
+      {state?.formError ? (
+        <AdminAlert variant="error" message={state.formError} />
+      ) : null}
 
       <label className="flex flex-col gap-2">
         <span className="text-[10px] uppercase tracking-[0.32em] text-base-content/60">

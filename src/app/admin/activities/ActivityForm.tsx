@@ -1,11 +1,12 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import {
   upsertActivity,
   type ActivityActionState,
 } from "@/app/actions/activities";
+import { useAdminToast } from "@/components/admin/AdminToastProvider";
 
 interface ActivityFormProps {
   activity?: {
@@ -62,12 +63,28 @@ export function ActivityForm({
   const filteredSubcategories = subcategories.filter(
     (subcategory) => subcategory.category_id === selectedCategoryId,
   );
+  const { showToast, hideLoading } = useAdminToast();
+
+  useEffect(() => {
+    if (!pending && !state?.ok && !state?.formError) {
+      hideLoading();
+    }
+  }, [pending, state?.ok, state?.formError, hideLoading]);
+
+  useEffect(() => {
+    if (state?.ok) {
+      void showToast({ message: "Activity saved.", variant: "success" });
+    } else if (state?.formError) {
+      void showToast({ message: state.formError, variant: "error" });
+    }
+  }, [state, showToast]);
 
   return (
     <form
       action={formAction}
       encType="multipart/form-data"
       className="grid grid-cols-1 gap-6 lg:grid-cols-2"
+      data-loading-message="Saving activity…"
     >
       {activity?.id && <input type="hidden" name="id" value={activity.id} />}
       <input
@@ -261,11 +278,6 @@ export function ActivityForm({
         </label>
       </div>
 
-      {state?.formError && (
-        <div className="lg:col-span-2 border border-error/40 bg-error/10 p-3 text-sm text-error">
-          {state.formError}
-        </div>
-      )}
 
       <div className="lg:col-span-2 flex items-center gap-3">
         <button
@@ -281,11 +293,6 @@ export function ActivityForm({
             "Save activity"
           )}
         </button>
-        {state?.ok && (
-          <span className="text-xs uppercase tracking-[0.32em] text-success">
-            Saved
-          </span>
-        )}
       </div>
     </form>
   );

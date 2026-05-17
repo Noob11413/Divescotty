@@ -2,8 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import {
+  redirectWithFlash,
+  redirectWithFlashErrorFromCatch,
+} from "@/lib/redirect-with-flash";
+import { phpAmountToCents } from "@/lib/utils";
 
-const toCents = (raw: string) => Math.round(Math.max(0, Number(raw) || 0) * 100);
+const toCents = (raw: string) => phpAmountToCents(raw);
 
 function isSchemaColumnMissingError(err: unknown): boolean {
   if (err == null || typeof err !== "object") return false;
@@ -16,6 +21,8 @@ function isSchemaColumnMissingError(err: unknown): boolean {
 }
 
 export async function upsertActivityCostTemplate(formData: FormData) {
+  const path = "/admin/cost-templates";
+  try {
   const activityId = String(formData.get("activity_id") ?? "");
   if (!activityId) throw new Error("Missing activity id.");
 
@@ -82,7 +89,7 @@ export async function upsertActivityCostTemplate(formData: FormData) {
     if (!result.error) {
       revalidatePath("/admin/cost-templates");
       revalidatePath("/admin/bookings");
-      return;
+      redirectWithFlash(path, "cost_template_saved");
     }
 
     lastError = result.error;
@@ -92,4 +99,7 @@ export async function upsertActivityCostTemplate(formData: FormData) {
   }
 
   throw lastError;
+  } catch (err) {
+    redirectWithFlashErrorFromCatch(path, err, "Could not save cost template.");
+  }
 }

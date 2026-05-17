@@ -1,10 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, useTransition } from "react";
-import { ChevronDown, ChevronRight, ExternalLink, Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
 import { updateBookingStatus } from "@/app/actions/bookings";
+import { useAdminToast } from "@/components/admin/AdminToastProvider";
 import type { BookingStatus } from "@/lib/supabase/database.types";
+import {
+  BOOKING_EMPLOYEE_REQUIRED_MESSAGE,
+  bookingFormEmployeeMissing,
+} from "@/lib/booking-form-client";
+import { PhpMoneyInput } from "@/components/ui/PhpMoneyInput";
 import { formatPricePHP } from "@/lib/utils";
 import type { InputHTMLAttributes } from "react";
 
@@ -105,7 +111,19 @@ export function BookingRow({
   employees,
 }: BookingRowProps) {
   const [open, setOpen] = useState(false);
-  const [pending, startTransition] = useTransition();
+  const { showToast, hideLoading } = useAdminToast();
+
+  const handleBookingSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    if (bookingFormEmployeeMissing(event.currentTarget)) {
+      event.preventDefault();
+      hideLoading();
+      showToast({
+        message: BOOKING_EMPLOYEE_REQUIRED_MESSAGE,
+        variant: "error",
+      });
+    }
+  };
+
   const systemQuoteCents = Math.max(
     0,
     booking.party_size * (booking.activity_price_cents ?? 0),
@@ -229,12 +247,14 @@ export function BookingRow({
               </Link>
             </div>
             <form
-              action={(formData) =>
-                startTransition(() => updateBookingStatus(formData))
-              }
+              action={updateBookingStatus}
               className="grid grid-cols-1 gap-6 lg:grid-cols-2"
+              data-loading-message="Saving changes…"
+              noValidate
+              onSubmit={handleBookingSubmit}
             >
               <input type="hidden" name="id" value={booking.id} />
+              <input type="hidden" name="return_to" value="/admin/bookings" />
 
               <div className="space-y-3">
                 <ReadonlyField label="Phone" value={booking.customer_phone} />
@@ -357,14 +377,16 @@ export function BookingRow({
 
                 <label className="flex flex-col gap-2">
                   <span className="text-[10px] uppercase tracking-[0.32em] text-base-content/60">
-                    Employee
+                    Employee <span className="text-error">*</span>
                   </span>
                   <select
                     name="employee_id"
                     defaultValue={booking.employee_id ?? ""}
                     className="select select-bordered bg-base-100"
                   >
-                    <option value="">Unassigned</option>
+                    <option value="" disabled>
+                      Select employee
+                    </option>
                     {employees.map((employee) => (
                       <option key={employee.id} value={employee.id}>
                         {employee.name} ({employee.employee_code}) - {employee.role}
@@ -409,13 +431,11 @@ export function BookingRow({
                       ))}
                     </select>
                   </label>
-                  <InputField
+                  <PhpMoneyInput
                     label="Amount paid (PHP)"
                     name="amount_paid_php"
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    defaultValue={(booking.amount_paid_cents / 100).toString()}
+                    defaultAmountPhp={booking.amount_paid_cents / 100}
+                    emptyWhenZero
                   />
                   <InputField
                     label="Payment method (mock)"
@@ -460,13 +480,10 @@ export function BookingRow({
                     label="Gear total (auto)"
                     value={formatPricePHP(booking.gear_cost_cents)}
                   />
-                  <InputField
+                  <PhpMoneyInput
                     label="Other costs (PHP)"
                     name="other_cost_php"
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    defaultValue={otherPhpDefault.toString()}
+                    defaultAmountPhp={otherPhpDefault}
                   />
                   <ReadonlyField
                     label="Instructor hours (auto)"
@@ -476,16 +493,9 @@ export function BookingRow({
 
                 <button
                   type="submit"
-                  disabled={pending}
-                  className="inline-flex items-center justify-center gap-3 bg-primary px-6 py-3 text-xs font-semibold uppercase tracking-[0.32em] text-primary-content hover:bg-primary/90 disabled:opacity-60"
+                  className="inline-flex items-center justify-center gap-3 bg-primary px-6 py-3 text-xs font-semibold uppercase tracking-[0.32em] text-primary-content hover:bg-primary/90"
                 >
-                  {pending ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" /> Saving…
-                    </>
-                  ) : (
-                    "Save changes"
-                  )}
+                  Save changes
                 </button>
               </div>
             </form>

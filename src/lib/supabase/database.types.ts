@@ -492,6 +492,15 @@ export interface Database {
           contact_email: string;
           whatsapp_number: string;
           timezone: string;
+          hero_eyebrow: string | null;
+          hero_title: string | null;
+          hero_subtitle: string | null;
+          hero_video_url: string | null;
+          hero_poster_url: string | null;
+          hero_primary_cta_label: string | null;
+          hero_primary_cta_href: string | null;
+          hero_secondary_cta_label: string | null;
+          hero_secondary_cta_href: string | null;
           updated_at: string;
         };
         Insert: {
@@ -500,6 +509,15 @@ export interface Database {
           contact_email?: string;
           whatsapp_number?: string;
           timezone?: string;
+          hero_eyebrow?: string | null;
+          hero_title?: string | null;
+          hero_subtitle?: string | null;
+          hero_video_url?: string | null;
+          hero_poster_url?: string | null;
+          hero_primary_cta_label?: string | null;
+          hero_primary_cta_href?: string | null;
+          hero_secondary_cta_label?: string | null;
+          hero_secondary_cta_href?: string | null;
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["site_settings"]["Insert"]>;

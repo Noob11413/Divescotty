@@ -1,5 +1,19 @@
 import Link from "next/link";
-import { ArrowUpRight } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowUpRight,
+  CalendarX,
+  CheckCircle2,
+  CircleDot,
+  ClipboardList,
+  Clock,
+  LayoutDashboard,
+  Sparkles,
+  Users,
+  XCircle,
+  type LucideIcon,
+} from "lucide-react";
+import { AdminAlert } from "@/components/ui/AdminAlert";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate } from "@/lib/utils";
 import type { BookingStatus } from "@/lib/supabase/database.types";
@@ -11,6 +25,20 @@ const STATUS_LABELS: Record<BookingStatus, string> = {
   confirmed: "Confirmed",
   cancelled: "Cancelled",
   completed: "Completed",
+};
+
+const STATUS_ICONS: Record<BookingStatus, LucideIcon> = {
+  pending: Clock,
+  confirmed: CheckCircle2,
+  cancelled: XCircle,
+  completed: Sparkles,
+};
+
+const STATUS_ACCENTS: Record<BookingStatus, string> = {
+  pending: "text-warning",
+  confirmed: "text-success",
+  cancelled: "text-error",
+  completed: "text-info",
 };
 
 export const dynamic = "force-dynamic";
@@ -300,91 +328,150 @@ export default async function AdminDashboard() {
     };
   });
 
+  const todayLabel = now.toLocaleDateString("en-PH", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+
   return (
     <div className="flex flex-col gap-10">
-      <header>
-        <p className="text-[10px] uppercase tracking-[0.32em] text-base-content/60">
-          Overview
-        </p>
-        <h1 className="font-display mt-2 text-4xl uppercase">Dashboard</h1>
+      <header className="flex flex-col gap-5 border-b border-base-content/10 pb-8 md:flex-row md:items-end md:justify-between">
+        <div className="flex items-start gap-4">
+          <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <LayoutDashboard className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+          </span>
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.32em] text-base-content/60">
+              Overview
+            </p>
+            <h1 className="font-display mt-2 text-4xl uppercase">Dashboard</h1>
+            <p className="mt-2 text-sm text-base-content/65">{todayLabel}</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/admin/bookings"
+            className="inline-flex items-center gap-2 border border-base-content/15 bg-base-100 px-4 py-2 text-[11px] uppercase tracking-[0.28em] text-base-content/75 transition hover:border-primary/40 hover:text-primary"
+          >
+            <ClipboardList className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+            All bookings
+          </Link>
+          <Link
+            href="/admin/employees"
+            className="inline-flex items-center gap-2 border border-base-content/15 bg-base-100 px-4 py-2 text-[11px] uppercase tracking-[0.28em] text-base-content/75 transition hover:border-primary/40 hover:text-primary"
+          >
+            <Users className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+            Employees
+          </Link>
+        </div>
       </header>
+
+      {(countMap.pending ?? 0) > 0 ? (
+        <AdminAlert
+          variant="info"
+          href="/admin/bookings?status=pending"
+          message={`${countMap.pending} pending booking${countMap.pending === 1 ? "" : "s"} awaiting review.`}
+        />
+      ) : null}
 
       <ProfitInsightsBoard rows={profitRows} />
 
-      <section className="grid grid-cols-2 gap-px overflow-hidden rounded border border-base-content/10 bg-base-content/10 md:grid-cols-5">
-        <Stat label="Total" value={total} />
-        {(Object.keys(STATUS_LABELS) as BookingStatus[]).map((s) => (
-          <Stat key={s} label={STATUS_LABELS[s]} value={countMap[s] ?? 0} />
-        ))}
+      <section>
+        <div className="mb-3 flex items-center gap-2 text-[10px] uppercase tracking-[0.32em] text-base-content/55">
+          <CircleDot className="h-3 w-3" strokeWidth={1.75} aria-hidden />
+          Bookings snapshot
+        </div>
+        <div className="grid grid-cols-2 gap-px overflow-hidden rounded border border-base-content/10 bg-base-content/10 md:grid-cols-5">
+          <Stat label="Total" value={total} icon={ClipboardList} />
+          {(Object.keys(STATUS_LABELS) as BookingStatus[]).map((s) => (
+            <Stat
+              key={s}
+              label={STATUS_LABELS[s]}
+              value={countMap[s] ?? 0}
+              icon={STATUS_ICONS[s]}
+              accentClassName={STATUS_ACCENTS[s]}
+              href={`/admin/bookings?status=${s}`}
+            />
+          ))}
+        </div>
       </section>
 
       <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div className="border border-warning/30 bg-warning/5 p-4">
-          <p className="text-[10px] uppercase tracking-[0.28em] text-warning">
-            Ops warning
-          </p>
-          <h3 className="font-display mt-2 text-xl uppercase">
-            Unassigned upcoming ({unassignedUpcoming.length})
-          </h3>
-          {unassignedUpcoming.length === 0 ? (
-            <p className="mt-2 text-sm text-base-content/70">
-              No unassigned pending/confirmed bookings.
-            </p>
-          ) : (
-            <div className="mt-3 space-y-2">
-              {unassignedUpcoming.map((row) => {
-                const activityName = Array.isArray(row.activity)
-                  ? row.activity[0]?.name
-                  : row.activity?.name;
-                return (
-                  <p key={row.id} className="text-sm text-base-content/80">
-                    <span className="font-mono text-xs">{row.reference}</span>{" "}
-                    - {row.customer_name} ({activityName || "Unknown activity"}) on{" "}
+        <OpsCard
+          tone="warning"
+          icon={AlertTriangle}
+          eyebrow="Ops warning"
+          title={`Unassigned upcoming (${unassignedUpcoming.length})`}
+          emptyLabel="All upcoming bookings have an instructor assigned."
+          isEmpty={unassignedUpcoming.length === 0}
+        >
+          {unassignedUpcoming.map((row) => {
+            const activityName = Array.isArray(row.activity)
+              ? row.activity[0]?.name
+              : row.activity?.name;
+            return (
+              <Link
+                key={row.id}
+                href={`/admin/bookings#${row.id}`}
+                className="group flex items-start justify-between gap-3 border border-warning/15 bg-base-100/70 px-3 py-2 text-sm text-base-content/80 transition hover:border-warning/40 hover:bg-base-100"
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="font-mono text-[11px] text-warning">
+                    {row.reference}
+                  </span>{" "}
+                  · {row.customer_name}{" "}
+                  <span className="text-base-content/55">
+                    ({activityName || "Unknown activity"})
+                  </span>
+                  <span className="block text-[11px] text-base-content/55">
                     {formatDate(row.preferred_date)}
-                  </p>
-                );
-              })}
-            </div>
-          )}
-        </div>
+                  </span>
+                </span>
+                <ArrowUpRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-base-content/40 transition group-hover:text-warning" />
+              </Link>
+            );
+          })}
+        </OpsCard>
 
-        <div className="border border-error/30 bg-error/5 p-4">
-          <p className="text-[10px] uppercase tracking-[0.28em] text-error">
-            Scheduling risk
-          </p>
-          <h3 className="font-display mt-2 text-xl uppercase">
-            Instructor conflicts ({conflicts.length})
-          </h3>
-          {conflicts.length === 0 ? (
-            <p className="mt-2 text-sm text-base-content/70">
-              No overlapping instructor bookings found.
-            </p>
-          ) : (
-            <div className="mt-3 space-y-2">
-              {conflicts.slice(0, 8).map((c, idx) => (
-                <p key={`${c.leftRef}-${c.rightRef}-${idx}`} className="text-sm text-base-content/80">
-                  {c.employee} has overlap on {formatDate(c.date)}: {c.leftRef}{" "}
-                  ({c.leftCustomer}, {c.leftActivity}) and {c.rightRef} (
-                  {c.rightCustomer}, {c.rightActivity})
-                </p>
-              ))}
+        <OpsCard
+          tone="error"
+          icon={CalendarX}
+          eyebrow="Scheduling risk"
+          title={`Instructor conflicts (${conflicts.length})`}
+          emptyLabel="No overlapping instructor bookings found."
+          isEmpty={conflicts.length === 0}
+        >
+          {conflicts.slice(0, 8).map((c, idx) => (
+            <div
+              key={`${c.leftRef}-${c.rightRef}-${idx}`}
+              className="border border-error/15 bg-base-100/70 px-3 py-2 text-sm text-base-content/80"
+            >
+              <p className="text-[11px] uppercase tracking-[0.22em] text-error/80">
+                {c.employee} · {formatDate(c.date)}
+              </p>
+              <p className="mt-1">
+                <span className="font-mono text-[11px]">{c.leftRef}</span> (
+                {c.leftCustomer}, {c.leftActivity})
+                <span className="text-base-content/45"> overlaps with </span>
+                <span className="font-mono text-[11px]">{c.rightRef}</span> (
+                {c.rightCustomer}, {c.rightActivity})
+              </p>
             </div>
-          )}
-        </div>
+          ))}
+        </OpsCard>
       </section>
 
       <section>
-        <div className="flex items-end justify-between">
-          <h2 className="font-display text-2xl uppercase">Employee operations</h2>
-          <Link
-            href="/admin/employees"
-            className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.28em] hover:text-primary"
-          >
-            Manage employees
-            <ArrowUpRight className="h-3.5 w-3.5" />
-          </Link>
-        </div>
-        <div className="mt-4 overflow-hidden border border-base-content/10">
+        <SectionHeading
+          icon={Users}
+          title="Employee operations"
+          description="Live status of active staff based on today's and upcoming assignments."
+          actionHref="/admin/employees"
+          actionLabel="Manage employees"
+        />
+        <div className="mt-4 overflow-hidden border border-base-content/10 bg-base-100">
           <table className="table">
             <thead className="bg-base-200">
               <tr className="text-[10px] uppercase tracking-[0.28em] text-base-content/60">
@@ -396,7 +483,10 @@ export default async function AdminDashboard() {
             </thead>
             <tbody>
               {employeeOpsRows.map((row) => (
-                <tr key={row.employee.id} className="border-t border-base-content/10">
+                <tr
+                  key={row.employee.id}
+                  className="border-t border-base-content/10 transition hover:bg-base-200/40"
+                >
                   <td>
                     <p className="font-medium">{row.employee.name}</p>
                     <p className="text-xs uppercase tracking-[0.2em] text-base-content/60">
@@ -447,18 +537,14 @@ export default async function AdminDashboard() {
       </section>
 
       <section>
-        <div className="flex items-end justify-between">
-          <h2 className="font-display text-2xl uppercase">Latest bookings</h2>
-          <Link
-            href="/admin/bookings"
-            className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.28em] hover:text-primary"
-          >
-            View all
-            <ArrowUpRight className="h-3.5 w-3.5" />
-          </Link>
-        </div>
-
-        <div className="mt-4 overflow-hidden border border-base-content/10">
+        <SectionHeading
+          icon={ClipboardList}
+          title="Latest bookings"
+          description="Most recent customer requests across the catalog."
+          actionHref="/admin/bookings"
+          actionLabel="View all"
+        />
+        <div className="mt-4 overflow-hidden border border-base-content/10 bg-base-100">
           <table className="table">
             <thead className="bg-base-200">
               <tr className="text-[10px] uppercase tracking-[0.28em] text-base-content/60">
@@ -473,7 +559,10 @@ export default async function AdminDashboard() {
             </thead>
             <tbody>
               {recentRows.map((b) => (
-                <tr key={b.id} className="border-t border-base-content/10">
+                <tr
+                  key={b.id}
+                  className="border-t border-base-content/10 transition hover:bg-base-200/40"
+                >
                   <td className="font-mono text-xs">{b.reference}</td>
                   <td>{b.customer_name}</td>
                   <td>
@@ -489,9 +578,10 @@ export default async function AdminDashboard() {
                   <td>
                     <Link
                       href={`/admin/bookings#${b.id}`}
-                      className="text-xs uppercase tracking-[0.28em] hover:text-primary"
+                      className="inline-flex items-center gap-1 text-xs uppercase tracking-[0.28em] hover:text-primary"
                     >
                       Open
+                      <ArrowUpRight className="h-3 w-3" strokeWidth={1.75} aria-hidden />
                     </Link>
                   </td>
                 </tr>
@@ -532,13 +622,146 @@ function EmployeeStatusBadge({ status }: { status: "busy" | "scheduled" | "avail
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function Stat({
+  label,
+  value,
+  icon: Icon,
+  accentClassName,
+  href,
+}: {
+  label: string;
+  value: number;
+  icon?: LucideIcon;
+  accentClassName?: string;
+  href?: string;
+}) {
+  const body = (
+    <div className="group flex h-full flex-col gap-2 bg-base-100 p-6 transition hover:bg-base-200/60">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] uppercase tracking-[0.32em] text-base-content/60">
+          {label}
+        </p>
+        {Icon ? (
+          <Icon
+            className={`h-3.5 w-3.5 ${accentClassName ?? "text-base-content/40"}`}
+            strokeWidth={1.75}
+            aria-hidden
+          />
+        ) : null}
+      </div>
+      <p className="font-display text-4xl">{value}</p>
+      {href ? (
+        <span className="mt-auto inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.28em] text-base-content/45 transition group-hover:text-primary">
+          View
+          <ArrowUpRight className="h-3 w-3" strokeWidth={1.75} aria-hidden />
+        </span>
+      ) : null}
+    </div>
+  );
+  if (href) {
+    return (
+      <Link href={href} className="block focus:outline-none focus:ring-1 focus:ring-primary/30">
+        {body}
+      </Link>
+    );
+  }
+  return body;
+}
+
+function SectionHeading({
+  icon: Icon,
+  title,
+  description,
+  actionHref,
+  actionLabel,
+}: {
+  icon: LucideIcon;
+  title: string;
+  description?: string;
+  actionHref?: string;
+  actionLabel?: string;
+}) {
   return (
-    <div className="bg-base-100 p-6">
-      <p className="text-[10px] uppercase tracking-[0.32em] text-base-content/60">
-        {label}
-      </p>
-      <p className="font-display mt-2 text-4xl">{value}</p>
+    <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+      <div className="flex items-start gap-3">
+        <span className="mt-1 inline-flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <Icon className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+        </span>
+        <div>
+          <h2 className="font-display text-2xl uppercase">{title}</h2>
+          {description ? (
+            <p className="mt-1 text-sm text-base-content/65">{description}</p>
+          ) : null}
+        </div>
+      </div>
+      {actionHref && actionLabel ? (
+        <Link
+          href={actionHref}
+          className="inline-flex items-center gap-2 self-start text-xs uppercase tracking-[0.28em] text-base-content/70 transition hover:text-primary md:self-end"
+        >
+          {actionLabel}
+          <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+        </Link>
+      ) : null}
+    </div>
+  );
+}
+
+function OpsCard({
+  tone,
+  icon: Icon,
+  eyebrow,
+  title,
+  emptyLabel,
+  isEmpty,
+  children,
+}: {
+  tone: "warning" | "error";
+  icon: LucideIcon;
+  eyebrow: string;
+  title: string;
+  emptyLabel: string;
+  isEmpty: boolean;
+  children?: React.ReactNode;
+}) {
+  const toneStyles =
+    tone === "warning"
+      ? {
+          border: "border-warning/30",
+          bg: "bg-warning/5",
+          badgeBg: "bg-warning/15",
+          text: "text-warning",
+        }
+      : {
+          border: "border-error/30",
+          bg: "bg-error/5",
+          badgeBg: "bg-error/15",
+          text: "text-error",
+        };
+  return (
+    <div className={`flex flex-col gap-4 border ${toneStyles.border} ${toneStyles.bg} p-5`}>
+      <div className="flex items-start gap-3">
+        <span
+          className={`inline-flex h-9 w-9 items-center justify-center rounded-full ${toneStyles.badgeBg} ${toneStyles.text}`}
+        >
+          <Icon className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+        </span>
+        <div>
+          <p
+            className={`text-[10px] uppercase tracking-[0.28em] ${toneStyles.text}`}
+          >
+            {eyebrow}
+          </p>
+          <h3 className="font-display mt-1 text-xl uppercase">{title}</h3>
+        </div>
+      </div>
+      {isEmpty ? (
+        <p className="rounded border border-dashed border-base-content/15 bg-base-100/40 px-3 py-3 text-sm text-base-content/65">
+          {emptyLabel}
+        </p>
+      ) : (
+        <div className="flex flex-col gap-2">{children}</div>
+      )}
     </div>
   );
 }

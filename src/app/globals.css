@@ -77,6 +77,18 @@
   --color-neutral: oklch(15% 0.005 240);
   --color-neutral-content: oklch(98% 0 0);
 
+  --color-info: oklch(62% 0.12 220);
+  --color-info-content: oklch(98% 0 0);
+
+  --color-success: oklch(58% 0.16 150);
+  --color-success-content: oklch(98% 0 0);
+
+  --color-warning: oklch(78% 0.14 85);
+  --color-warning-content: oklch(22% 0.02 85);
+
+  --color-error: oklch(58% 0.2 25);
+  --color-error-content: oklch(98% 0 0);
+
   --radius-selector: 0;
   --radius-field: 0.125rem;
   --radius-box: 0.25rem;
@@ -169,3 +181,17 @@ body {
 /* Hide scrollbar utility for marquees */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Marketing scuba booking dialog — light dim, not solid black */
+dialog.modal {
+  border: none;
+  padding: 0;
+  margin: auto;
+  max-width: none;
+  max-height: none;
+  background: transparent;
+}
+
+dialog.modal::backdrop {
+  background: oklch(0% 0 0 / 0.35);
+}

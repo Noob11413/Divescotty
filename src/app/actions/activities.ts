@@ -2,6 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import type { FlashKey } from "@/lib/admin-flash";
+import {
+  redirectWithFlash,
+  redirectWithFlashErrorFromCatch,
+  rethrowIfRedirect,
+} from "@/lib/redirect-with-flash";
 import { activityFormSchema } from "@/lib/validators";
 import { Buffer } from "node:buffer";
 import type { Database } from "@/lib/supabase/database.types";
@@ -61,6 +67,7 @@ export async function upsertActivity(
   try {
     imageUrl = await getHeroImageValue(formData, "image_file", "image_current");
   } catch (err) {
+    rethrowIfRedirect(err);
     return {
       ok: false,
       formError: err instanceof Error ? err.message : "Image upload failed",
@@ -177,15 +184,26 @@ export async function upsertActivity(
 }
 
 export async function deleteActivity(formData: FormData) {
+  const path = "/admin/activities";
   const id = String(formData.get("id") ?? "");
   if (!id) return;
-  const supabase = await createClient();
-  await supabase.from("activities").delete().eq("id", id);
-  revalidatePath("/admin/activities");
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.from("activities").delete().eq("id", id);
+    if (error) throw error;
+    revalidatePath("/admin/activities");
+    revalidatePath("/");
+    redirectWithFlash(path, "activity_deleted");
+  } catch (err) {
+    redirectWithFlashErrorFromCatch(path, err, "Could not delete activity.");
+  }
 }
 
 export async function upsertCategory(formData: FormData) {
+  const path = "/admin/categories";
   const id = (formData.get("id") as string | null) || undefined;
+  const isCreate = !id;
+  try {
   const supabase = await createClient();
   const heroImage = await getHeroImageValue(
     formData,
@@ -214,16 +232,27 @@ export async function upsertCategory(formData: FormData) {
     hero_image: heroImage,
     sort_order: sortOrder,
   };
-  await supabase.from("categories").upsert(payload as never);
+  const { error } = await supabase.from("categories").upsert(payload as never);
+  if (error) throw error;
   revalidatePath("/admin/categories");
   revalidatePath("/");
+  redirectWithFlash(
+    path,
+    isCreate ? "category_created" : "category_updated",
+  );
+  } catch (err) {
+    redirectWithFlashErrorFromCatch(path, err, "Could not save category.");
+  }
 }
 
 export async function deleteCategory(formData: FormData) {
+  const path = "/admin/categories";
   const id = String(formData.get("id") ?? "");
   const mode = String(formData.get("mode") ?? "soft");
   if (!id) return;
 
+  let flash: FlashKey = "category_deactivated";
+  try {
   const supabase = await createClient();
   if (mode === "restore") {
     const { error } = await supabase
@@ -237,6 +266,7 @@ export async function deleteCategory(formData: FormData) {
           : `Restore failed: ${error.message}`,
       );
     }
+    flash = "category_restored";
   } else if (mode === "hard") {
     const hardDelete = await supabase.from("categories").delete().eq("id", id);
     if (hardDelete.error) {
@@ -246,6 +276,7 @@ export async function deleteCategory(formData: FormData) {
           : `Hard delete failed: ${hardDelete.error.message}`,
       );
     }
+    flash = "category_deleted";
   } else {
     const { error } = await supabase
       .from("categories")
@@ -258,13 +289,20 @@ export async function deleteCategory(formData: FormData) {
           : `Soft delete failed: ${error.message}`,
       );
     }
+    flash = "category_deactivated";
   }
 
   revalidatePath("/admin/categories");
   revalidatePath("/");
+  redirectWithFlash(path, flash);
+  } catch (err) {
+    redirectWithFlashErrorFromCatch(path, err, "Category action failed.");
+  }
 }
 
 export async function upsertLocation(formData: FormData) {
+  const path = "/admin/locations";
+  try {
   const id = (formData.get("id") as string | null) || undefined;
   const supabase = await createClient();
   const heroImage = await getHeroImageValue(
@@ -281,16 +319,24 @@ export async function upsertLocation(formData: FormData) {
     hero_image: heroImage,
     sort_order: Number(formData.get("sort_order") ?? 0),
   };
-  await supabase.from("locations").upsert(payload as never);
+  const { error } = await supabase.from("locations").upsert(payload as never);
+  if (error) throw error;
   revalidatePath("/admin/locations");
   revalidatePath("/");
+  redirectWithFlash(path, "location_saved");
+  } catch (err) {
+    redirectWithFlashErrorFromCatch(path, err, "Could not save location.");
+  }
 }
 
 export async function upsertSubcategory(formData: FormData) {
+  const path = "/admin/categories";
   const id = (formData.get("id") as string | null) || undefined;
+  const isCreate = !id;
   const categoryId = String(formData.get("category_id") ?? "");
   if (!categoryId) throw new Error("Missing category_id");
 
+  try {
   const supabase = await createClient();
   const rawSortOrder = Number(formData.get("sort_order") ?? 0);
   let sortOrder = rawSortOrder;
@@ -314,36 +360,54 @@ export async function upsertSubcategory(formData: FormData) {
     description: (formData.get("description") as string | null) || null,
     sort_order: sortOrder,
   };
-  await supabase.from("subcategories").upsert(payload as never);
+  const { error } = await supabase.from("subcategories").upsert(payload as never);
+  if (error) throw error;
   revalidatePath("/admin/categories");
   revalidatePath("/admin/activities");
   revalidatePath("/");
+  redirectWithFlash(
+    path,
+    isCreate ? "subcategory_created" : "subcategory_updated",
+  );
+  } catch (err) {
+    redirectWithFlashErrorFromCatch(path, err, "Could not save subcategory.");
+  }
 }
 
 export async function deleteSubcategory(formData: FormData) {
+  const path = "/admin/categories";
   const id = String(formData.get("id") ?? "");
   const mode = String(formData.get("mode") ?? "soft");
   if (!id) return;
 
+  let flash: FlashKey = "subcategory_deactivated";
+  try {
   const supabase = await createClient();
   if (mode === "restore") {
     await supabase
       .from("subcategories")
       .update({ deleted_at: null } as never)
       .eq("id", id);
+    flash = "subcategory_restored";
   } else if (mode === "hard") {
     const hardDelete = await supabase.from("subcategories").delete().eq("id", id);
     if (hardDelete.error) {
       throw new Error(`Hard delete failed: ${hardDelete.error.message}`);
     }
+    flash = "subcategory_deleted";
   } else {
     await supabase
       .from("subcategories")
       .update({ deleted_at: new Date().toISOString() } as never)
       .eq("id", id);
+    flash = "subcategory_deactivated";
   }
 
   revalidatePath("/admin/categories");
   revalidatePath("/admin/activities");
   revalidatePath("/");
+  redirectWithFlash(path, flash);
+  } catch (err) {
+    redirectWithFlashErrorFromCatch(path, err, "Subcategory action failed.");
+  }
 }

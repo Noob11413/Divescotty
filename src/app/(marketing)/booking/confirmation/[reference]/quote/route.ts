@@ -84,6 +84,7 @@ export async function GET(
     amountPaidCents: b.amount_paid_cents ?? 0,
     paymentStatus: b.payment_status,
     pricePerPersonCents,
+    reference: b.reference,
     businessName:
       (settings as { business_name?: string } | null)?.business_name ??
       "DiveScotty",

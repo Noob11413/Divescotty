@@ -1,6 +1,16 @@
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
+import { PDFDocument, StandardFonts } from "pdf-lib";
+import { formatMoneyCents } from "@/lib/utils";
+import {
+  drawCardPair,
+  drawFooter,
+  drawHeaderBand,
+  drawLineItems,
+  drawMetaRow,
+  drawNotesBox,
+  drawTotalsCard,
+  PDF_PAGE,
+  type StatusTone,
+} from "@/lib/pdf-design";
 
 /** Matches booking confirmation PDF branding; no booking reference on the slip. */
 export type QuotationPdfInput = {
@@ -14,193 +24,154 @@ export type QuotationPdfInput = {
   paymentStatus: string;
   businessName?: string;
   pricePerPersonCents?: number | null;
+  /** Optional reference shown on the footer for traceability (still labeled as quote). */
+  reference?: string;
+  /** ISO date string YYYY-MM-DD. Defaults to today. */
+  issuedOn?: string;
+  /** Days the quote is valid for. Defaults to 14. */
+  validForDays?: number;
 };
 
-function moneyLine(cents: number, currency: string): string {
-  const n = Math.max(0, cents) / 100;
-  const formatted = n.toLocaleString("en-PH", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  });
-  return `${currency} ${formatted}`;
+function paymentTone(label: string): StatusTone {
+  const v = (label || "").toLowerCase();
+  if (v === "paid") return "success";
+  if (v === "partial") return "warning";
+  if (v === "refunded") return "danger";
+  return "warning";
+}
+
+function addDays(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
 }
 
 export async function buildQuotationPdf(input: QuotationPdfInput) {
   const pdf = await PDFDocument.create();
-  const page = pdf.addPage([595, 842]);
-  const { width, height } = page.getSize();
-  const font = await pdf.embedFont(StandardFonts.Helvetica);
-  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
-  const blue = rgb(0.05, 0.28, 0.52);
-  const softBlue = rgb(0.72, 0.79, 0.86);
-  const muted = rgb(0.35, 0.38, 0.42);
-  const ink = rgb(0.1, 0.12, 0.14);
-
-  const left = 50;
-  const right = width - 50;
-  let y = height - 66;
-  const logoPadding = 14;
-  let headerTextX = 178;
-
-  try {
-    const logoPath = path.join(process.cwd(), "public", "media", "scotty-logo.png");
-    const logoBytes = await readFile(logoPath);
-    const logo = await pdf.embedPng(logoBytes);
-    const scaled = logo.scale(0.24);
-    const logoX = left + logoPadding;
-    const logoY = height - 120;
-    page.drawImage(logo, {
-      x: logoX,
-      y: logoY,
-      width: scaled.width,
-      height: scaled.height,
-    });
-    headerTextX = logoX + scaled.width + 20;
-  } catch {
-    // resilient without logo
-  }
-
-  page.drawText(input.businessName ?? "Scotty's Action Sports Network", {
-    x: headerTextX,
-    y,
-    size: 20,
-    font: bold,
-    color: blue,
-  });
-  y -= 24;
-  page.drawText("Punta Engano, Mactan  |  +63 917 631 2960  |  bookings@divescotty.com", {
-    x: headerTextX,
-    y,
-    size: 9.5,
-    font,
-    color: rgb(0.35, 0.38, 0.42),
-  });
-
-  const lineY = y - 26;
-  page.drawLine({
-    start: { x: left, y: lineY },
-    end: { x: right, y: lineY },
-    thickness: 2,
-    color: softBlue,
-  });
-
-  const sectionTop = lineY - 40;
-  page.drawText("Quotation details", {
-    x: left,
-    y: sectionTop,
-    size: 13,
-    font: bold,
-    color: blue,
-  });
-  page.drawText("QUOTATION", {
-    x: right - 160,
-    y: sectionTop - 2,
-    size: 20,
-    font: bold,
-    color: blue,
-  });
-
-  const labelX = left;
-  const valueX = left + 132;
-  let detailY = sectionTop - 28;
-  const detailRow = (label: string, value: string) => {
-    page.drawText(label, {
-      x: labelX,
-      y: detailY,
-      size: 10.5,
-      font,
-      color: rgb(0.24, 0.28, 0.33),
-    });
-    page.drawText(value, {
-      x: valueX,
-      y: detailY,
-      size: 10.5,
-      font: bold,
-      color: ink,
-      maxWidth: 220,
-    });
-    detailY -= 22;
+  const page = pdf.addPage([PDF_PAGE.WIDTH, PDF_PAGE.HEIGHT]);
+  const fonts = {
+    body: await pdf.embedFont(StandardFonts.Helvetica),
+    bold: await pdf.embedFont(StandardFonts.HelveticaBold),
   };
 
-  detailRow("Customer", input.customerName);
-  detailRow("Email", input.customerEmail);
-  detailRow("Activity", input.activityName);
-  detailRow("Party size", `${input.partySize} pax`);
+  const businessName = input.businessName ?? "Scotty's Action Sports Network";
+  const issuedOn = input.issuedOn ?? new Date().toISOString().slice(0, 10);
+  const validForDays = input.validForDays ?? 14;
+  const validUntil = addDays(issuedOn, validForDays);
+  const currency = input.quotedCurrency?.trim() || "PHP";
+  const reference = input.reference ?? `QT-${issuedOn.replace(/-/g, "")}`;
 
-  let blockBottom = detailY - 16;
-  const cur = input.quotedCurrency?.trim() || "PHP";
-  const price =
+  // 1. Header band
+  let y = await drawHeaderBand({
+    page,
+    pdf,
+    fonts,
+    businessName,
+    contactLine:
+      "Punta Engano, Mactan  |  +63 917 631 2960  |  bookings@divescotty.com",
+    docLabel: "Quotation",
+    docSubLabel: `Issued ${issuedOn}`,
+  });
+
+  // 2. Meta strip
+  y = drawMetaRow({
+    page,
+    fonts,
+    y,
+    items: [
+      { label: "Quote reference", value: reference, tone: "primary" },
+      { label: "Issued", value: issuedOn },
+      { label: "Valid until", value: validUntil, tone: "warning" },
+    ],
+  });
+
+  // 3. Billed To + Quote subject
+  y = drawCardPair({
+    page,
+    fonts,
+    y,
+    left: {
+      title: "Prepared for",
+      rows: [
+        { label: "Name", value: input.customerName },
+        { label: "Email", value: input.customerEmail },
+      ],
+    },
+    right: {
+      title: "Quote summary",
+      rows: [
+        { label: "Activity", value: input.activityName },
+        { label: "Party size", value: `${input.partySize} pax` },
+        { label: "Currency", value: currency },
+      ],
+    },
+  });
+
+  // 4. Line items
+  const unit =
     input.pricePerPersonCents != null && input.pricePerPersonCents > 0
-      ? moneyLine(input.pricePerPersonCents, cur)
-      : "—";
-  const formula = `Party (${input.partySize}) x price per person (${price})`;
+      ? formatMoneyCents(input.pricePerPersonCents, currency)
+      : "-";
+  const total = input.pricePerPersonCents
+    ? formatMoneyCents(input.pricePerPersonCents * input.partySize, currency)
+    : formatMoneyCents(input.quotedTotalCents, currency);
 
-  page.drawText("Pricing summary", {
-    x: left,
-    y: blockBottom,
-    size: 12,
-    font: bold,
-    color: blue,
+  y = drawLineItems({
+    page,
+    fonts,
+    y,
+    items: [
+      {
+        description: input.activityName,
+        qty: input.partySize,
+        unitLabel: unit,
+        totalLabel: total,
+      },
+    ],
   });
-  blockBottom -= 18;
-  page.drawText(formula, {
-    x: left,
-    y: blockBottom,
-    size: 9,
-    font,
-    color: muted,
-    maxWidth: right - left,
-  });
-  blockBottom -= 22;
 
-  page.drawText("Total (quotation)", {
-    x: left,
-    y: blockBottom,
-    size: 9,
-    font: bold,
-    color: blue,
+  // 5. Totals card
+  const balance = Math.max(0, input.quotedTotalCents - input.amountPaidCents);
+  y = drawTotalsCard({
+    page,
+    fonts,
+    y,
+    rows: [
+      {
+        label: "Subtotal",
+        value: formatMoneyCents(input.quotedTotalCents, currency),
+      },
+      {
+        label: "Amount paid",
+        value: formatMoneyCents(input.amountPaidCents, currency),
+      },
+      {
+        label: "Estimated total",
+        value: formatMoneyCents(balance, currency),
+        emphasize: true,
+      },
+    ],
+    paymentStatusLabel: input.paymentStatus,
+    paymentTone: paymentTone(input.paymentStatus),
   });
-  page.drawText(moneyLine(input.quotedTotalCents, cur), {
-    x: left + 200,
-    y: blockBottom,
-    size: 11,
-    font: bold,
-    color: ink,
-  });
-  blockBottom -= 26;
 
-  page.drawText("Payment", {
-    x: left,
-    y: blockBottom,
-    size: 9,
-    font: bold,
-    color: blue,
+  // 6. Notes / terms
+  drawNotesBox({
+    page,
+    fonts,
+    y,
+    title: "Terms",
+    body: `This quotation is valid for ${validForDays} days from the issued date (until ${validUntil}). Prices are inclusive of standard equipment and guide fees. Final totals may vary based on confirmed dates, transfers, and additional services. This document is a price estimate, not a tax invoice.`,
   });
-  blockBottom -= 14;
-  page.drawText(`Status: ${input.paymentStatus}`, {
-    x: left + 8,
-    y: blockBottom,
-    size: 9,
-    font,
-    color: ink,
-  });
-  blockBottom -= 14;
-  page.drawText(`Amount paid: ${moneyLine(input.amountPaidCents, cur)}`, {
-    x: left + 8,
-    y: blockBottom,
-    size: 9,
-    font,
-    color: ink,
-  });
-  blockBottom -= 28;
 
-  page.drawText("This slip summarizes the quoted price for your trip. It is not a tax invoice.", {
-    x: left,
-    y: blockBottom,
-    size: 10,
-    font,
-    color: rgb(0.25, 0.25, 0.25),
-    maxWidth: right - left,
+  // 7. Footer
+  drawFooter({
+    page,
+    fonts,
+    reference,
+    businessName,
+    disclaimer:
+      "To confirm this quotation, reply to bookings@divescotty.com or message us on WhatsApp at +63 917 631 2960. Quoted prices honored until the validity date above.",
   });
 
   return Buffer.from(await pdf.save());

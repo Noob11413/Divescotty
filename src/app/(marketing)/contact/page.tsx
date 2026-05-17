@@ -1,4 +1,14 @@
-import { Mail, MapPin, MessageSquare, Phone } from "lucide-react";
+import {
+  Award,
+  CalendarRange,
+  CheckCircle2,
+  Clock,
+  Mail,
+  MapPin,
+  MessageSquare,
+  Phone,
+  Sparkles,
+} from "lucide-react";
 import { getLocations } from "@/lib/queries";
 import { CustomBookingRequestForm } from "@/components/booking/CustomBookingRequestForm";
 
@@ -93,14 +103,55 @@ export default async function ContactPage() {
 
       <section className="border-t border-base-content/10 bg-base-200/40 py-20">
         <div className="mx-auto grid max-w-[1600px] grid-cols-1 gap-10 px-5 md:grid-cols-12 md:px-10">
-          <div className="md:col-span-4">
-            <p className="eyebrow">Custom booking</p>
-            <h2 className="font-display mt-3 text-5xl uppercase">Build your own trip</h2>
-            <p className="mt-4 text-sm text-base-content/70">
-              If your plan does not match a standard activity, send us your exact
-              request and the team will quote and tailor it for you.
-            </p>
+          <div className="md:col-span-4 flex flex-col gap-6">
+            <div>
+              <p className="eyebrow">Custom booking</p>
+              <h2 className="font-display mt-3 text-5xl uppercase leading-[0.95]">
+                Build your
+                <br />
+                own trip
+              </h2>
+              <p className="mt-4 text-sm text-base-content/70">
+                If your plan does not match a standard activity, send us your
+                exact request and the team will quote and tailor it for you.
+              </p>
+            </div>
+
+            <div className="border border-base-content/10 bg-base-100 p-5">
+              <p className="inline-flex items-center gap-2 text-[10px] uppercase tracking-[0.32em] text-primary">
+                <Sparkles className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+                Every quote includes
+              </p>
+              <ul className="mt-4 space-y-3 text-sm text-base-content/80">
+                <Inclusion icon={CalendarRange}>
+                  Tailored itinerary built around your dates
+                </Inclusion>
+                <Inclusion icon={Award}>
+                  Certified instructors and licensed guides
+                </Inclusion>
+                <Inclusion icon={MapPin}>
+                  Dive sites, transfers, and pickups arranged for you
+                </Inclusion>
+                <Inclusion icon={CheckCircle2}>
+                  Transparent pricing — no charge until you approve
+                </Inclusion>
+              </ul>
+            </div>
+
+            <div className="border border-base-content/10 bg-base-100 p-5">
+              <p className="inline-flex items-center gap-2 text-[10px] uppercase tracking-[0.32em] text-base-content/60">
+                <Clock className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+                Response time
+              </p>
+              <p className="mt-3 font-display text-3xl uppercase">
+                Usually within hours
+              </p>
+              <p className="mt-1 text-xs text-base-content/60">
+                Live team on PH time (UTC+8). Replies even faster on WhatsApp.
+              </p>
+            </div>
           </div>
+
           <div className="md:col-span-8 border border-base-content/10 bg-base-100 p-6 md:p-8">
             <CustomBookingRequestForm
               locations={locations.map((location) => ({
@@ -112,5 +163,22 @@ export default async function ContactPage() {
         </div>
       </section>
     </>
+  );
+}
+
+function Inclusion({
+  icon: Icon,
+  children,
+}: {
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number; "aria-hidden"?: boolean }>;
+  children: React.ReactNode;
+}) {
+  return (
+    <li className="flex items-start gap-3">
+      <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <Icon className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+      </span>
+      <span className="leading-relaxed">{children}</span>
+    </li>
   );
 }

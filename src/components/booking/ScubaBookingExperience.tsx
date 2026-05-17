@@ -10,6 +10,7 @@ import {
 import { useActionState } from "react";
 import { Loader2 } from "lucide-react";
 import { createBooking, type CreateBookingState } from "@/app/actions/bookings";
+import { AdminAlert } from "@/components/ui/AdminAlert";
 import {
   defaultPartySizeForBooking,
   PARTY_SIZE_MAX,
@@ -268,9 +269,9 @@ export function ScubaBookingExperience({
               />
             </label>
 
-            {state?.formError && (
-              <p className="text-sm text-error">{state.formError}</p>
-            )}
+            {state?.formError ? (
+              <AdminAlert variant="error" message={state.formError} />
+            ) : null}
 
             <div className="modal-action mt-2">
               <button type="submit" className="btn btn-primary" disabled={pending}>

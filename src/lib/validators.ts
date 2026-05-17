@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { PARTY_SIZE_MAX, PARTY_SIZE_MIN } from "@/lib/booking-party-limits";
+import {
+  CUSTOM_PARTY_SIZE_MAX,
+  CUSTOM_PARTY_SIZE_MIN,
+  PARTY_SIZE_MAX,
+  PARTY_SIZE_MIN,
+} from "@/lib/booking-party-limits";
 
 export const bookingFormSchema = z.object({
   activityId: z.string().uuid({ message: "Activity is required" }),
@@ -52,6 +57,15 @@ export type BookingFormInput = z.infer<typeof bookingFormSchema>;
 export const adminBookingFormSchema = bookingFormSchema.extend({
   preferredDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a valid date"),
   initialStatus: z.enum(["pending", "confirmed"]).default("pending"),
+  // Admins handle larger groups (e.g. converted custom requests, charters).
+  partySize: z
+    .number({ invalid_type_error: "Party size is required" })
+    .int()
+    .min(PARTY_SIZE_MIN, `Party size must be at least ${PARTY_SIZE_MIN}`)
+    .max(
+      CUSTOM_PARTY_SIZE_MAX,
+      `Party size cannot exceed ${CUSTOM_PARTY_SIZE_MAX}`,
+    ),
 });
 
 export type AdminBookingFormInput = z.infer<typeof adminBookingFormSchema>;
@@ -73,10 +87,10 @@ export const customBookingRequestSchema = z.object({
   partySize: z.coerce
     .number()
     .int()
-    .min(PARTY_SIZE_MIN, `Party size must be at least ${PARTY_SIZE_MIN}`)
+    .min(CUSTOM_PARTY_SIZE_MIN, `Party size must be at least ${CUSTOM_PARTY_SIZE_MIN}`)
     .max(
-      PARTY_SIZE_MAX,
-      `Party size cannot exceed ${PARTY_SIZE_MAX}; contact us for larger groups`,
+      CUSTOM_PARTY_SIZE_MAX,
+      `Party size cannot exceed ${CUSTOM_PARTY_SIZE_MAX}; contact us for very large groups`,
     ),
   locationId: z.string().uuid().optional().nullable().or(z.literal("")),
   budgetNotes: z.string().max(240).optional().or(z.literal("")),

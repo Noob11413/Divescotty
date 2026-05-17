@@ -1,9 +1,14 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState, useTransition } from "react";
-import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { updateBookingStatus } from "@/app/actions/bookings";
+import { useAdminToast } from "@/components/admin/AdminToastProvider";
 import type { BookingStatus } from "@/lib/supabase/database.types";
+import {
+  BOOKING_EMPLOYEE_REQUIRED_MESSAGE,
+  bookingFormEmployeeMissing,
+} from "@/lib/booking-form-client";
 
 export type CalendarBooking = {
   id: string;
@@ -69,12 +74,23 @@ export function BookingCalendarBoard({
   }>;
 }) {
   const today = new Date();
-  const [saving, startTransition] = useTransition();
   const [monthCursor, setMonthCursor] = useState(
     new Date(today.getFullYear(), today.getMonth(), 1),
   );
   const [selectedDay, setSelectedDay] = useState(toDayKey(today));
   const [editingId, setEditingId] = useState<string | null>(null);
+  const { showToast, hideLoading } = useAdminToast();
+
+  const handleBookingSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    if (bookingFormEmployeeMissing(event.currentTarget)) {
+      event.preventDefault();
+      hideLoading();
+      showToast({
+        message: BOOKING_EMPLOYEE_REQUIRED_MESSAGE,
+        variant: "error",
+      });
+    }
+  };
 
   const bookingsByDay = useMemo(() => {
     return bookings.reduce(
@@ -315,21 +331,14 @@ export function BookingCalendarBoard({
                             </p>
                           )}
                           <form
-                            action={(formData) =>
-                              startTransition(() => {
-                                void (async () => {
-                                  try {
-                                    await updateBookingStatus(formData);
-                                    setEditingId(null);
-                                  } catch {
-                                    // Leave editor open so admin can fix and retry.
-                                  }
-                                })();
-                              })
-                            }
+                            action={updateBookingStatus}
                             className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-4"
+                            data-loading-message="Saving changes…"
+                            noValidate
+                            onSubmit={handleBookingSubmit}
                           >
                             <input type="hidden" name="id" value={b.id} />
+                            <input type="hidden" name="return_to" value="/admin" />
                             <input
                               type="hidden"
                               name="current_special_requests"
@@ -387,14 +396,16 @@ export function BookingCalendarBoard({
                             </label>
                             <label className="form-control">
                               <span className="label-text text-[10px] uppercase tracking-[0.2em]">
-                                Instructor
+                                Instructor <span className="text-error">*</span>
                               </span>
                               <select
                                 name="employee_id"
                                 defaultValue={b.employeeId ?? ""}
                                 className="select select-bordered select-sm bg-base-100"
                               >
-                                <option value="">Unassigned</option>
+                                <option value="" disabled>
+                                  Select employee
+                                </option>
                                 {employees.map((employee) => (
                                   <option key={employee.id} value={employee.id}>
                                     {employee.name} ({employee.employee_code}) - {employee.role}
@@ -416,17 +427,9 @@ export function BookingCalendarBoard({
                             <div className="flex flex-wrap items-center gap-2 md:col-span-4">
                               <button
                                 type="submit"
-                                disabled={saving}
                                 className="btn btn-sm btn-primary"
                               >
-                                {saving ? (
-                                  <>
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                    Saving
-                                  </>
-                                ) : (
-                                  "Save"
-                                )}
+                                Save
                               </button>
                               <button
                                 type="button"

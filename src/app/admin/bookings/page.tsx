@@ -194,7 +194,6 @@ export default async function AdminBookingsPage({
 }) {
   const sp = await searchParams;
   const filters = parseFilters(sp);
-  const createdRef = sp.created?.trim();
 
   const rawPage = Number(sp.page);
   const requestedPage =
@@ -269,14 +268,6 @@ export default async function AdminBookingsPage({
 
   return (
     <div className="flex flex-col gap-8">
-      {createdRef && (
-        <div className="border border-success/40 bg-success/10 px-4 py-3 text-sm">
-          Booking{" "}
-          <span className="font-mono font-semibold">{createdRef}</span> created. Customer
-          email sent if SMTP is configured.
-        </div>
-      )}
-
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-[10px] uppercase tracking-[0.32em] text-base-content/60">

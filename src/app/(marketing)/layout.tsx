@@ -1,3 +1,6 @@
+import { Suspense } from "react";
+import { AdminFlashBanner } from "@/components/admin/AdminFlashBanner";
+import { AdminToastProvider } from "@/components/admin/AdminToastProvider";
 import { Footer } from "@/components/site/Footer";
 import { Navbar } from "@/components/site/Navbar";
 import { getCategories, getSubcategoriesForNav } from "@/lib/queries";
@@ -31,7 +34,7 @@ export default async function MarketingLayout({
   }
 
   return (
-    <>
+    <AdminToastProvider>
       <Navbar
         categories={categories.map((category) => ({
           id: category.id,
@@ -41,8 +44,13 @@ export default async function MarketingLayout({
           subcategories: subsByCategory.get(category.id) ?? [],
         }))}
       />
-      <main className="min-h-screen">{children}</main>
+      <main className="min-h-screen">
+        <Suspense fallback={null}>
+          <AdminFlashBanner />
+        </Suspense>
+        {children}
+      </main>
       <Footer />
-    </>
+    </AdminToastProvider>
   );
 }

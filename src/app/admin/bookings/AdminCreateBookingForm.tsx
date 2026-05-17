@@ -1,11 +1,12 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import { Loader2, Plus } from "lucide-react";
 import {
   createAdminBooking,
   type AdminCreateBookingState,
 } from "@/app/actions/bookings";
+import { useAdminToast } from "@/components/admin/AdminToastProvider";
 import {
   defaultPartySizeForBooking,
   PARTY_SIZE_MAX,
@@ -59,14 +60,26 @@ export function AdminCreateBookingForm({
     return locations.filter((l) => allowed.has(l.id));
   }, [selected, locations]);
 
-  return (
-    <form action={formAction} className="flex max-w-2xl flex-col gap-5">
-      {state?.formError && (
-        <div className="border border-error/40 bg-error/10 p-3 text-sm text-error">
-          {state.formError}
-        </div>
-      )}
+  const { showToast, hideLoading } = useAdminToast();
 
+  useEffect(() => {
+    if (!pending && !state?.formError) {
+      hideLoading();
+    }
+  }, [pending, state?.formError, hideLoading]);
+
+  useEffect(() => {
+    if (state?.formError) {
+      void showToast({ message: state.formError, variant: "error" });
+    }
+  }, [state, showToast]);
+
+  return (
+    <form
+      action={formAction}
+      className="flex max-w-2xl flex-col gap-5"
+      data-loading-message="Creating booking…"
+    >
       <label className="flex flex-col gap-2">
         <span className="text-[10px] uppercase tracking-[0.32em] text-base-content/60">
           Activity

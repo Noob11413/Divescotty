@@ -3,7 +3,17 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { phpAmountToCents } from "@/lib/utils";
+import {
+  BOOKING_EMPLOYEE_REQUIRED_MESSAGE,
+  bookingRequiresEmployee,
+} from "@/lib/booking-guardrails";
+import {
+  redirectWithFlash,
+  redirectWithFlashError,
+} from "@/lib/redirect-with-flash";
 import { parseEndTimeFromSpecialRequests } from "@/lib/booking-time";
+import { notifyAdminNewBooking } from "@/lib/admin-notifications";
 import {
   sendBookingConfirmationEmail,
   sendBookingStatusUpdateEmail,
@@ -112,6 +122,24 @@ export async function createBooking(
     console.error("Booking confirmation email failed", emailError);
   }
 
+  try {
+    await notifyAdminNewBooking(supabase, {
+      bookingReference: reference,
+      customerName: data.customerName,
+      customerEmail: data.customerEmail,
+      customerPhone: data.customerPhone,
+      activityName: activityRow?.name ?? "Scuba activity",
+      preferredDate: data.preferredDate,
+      preferredTime: data.preferredTime || null,
+      partySize: data.partySize,
+      locationName: locationRow?.name ?? null,
+      specialRequests: mergedSpecialRequests || null,
+      source: "website",
+    });
+  } catch (notifyError) {
+    console.error("Admin new booking notification failed", notifyError);
+  }
+
   revalidatePath("/admin/bookings");
   redirect(`/booking/confirmation/${reference}`);
 }
@@ -153,6 +181,13 @@ export async function createAdminBooking(
   }
 
   const data = parsed.data;
+  if (data.initialStatus === "confirmed" && bookingRequiresEmployee(data.employeeId ?? "")) {
+    return {
+      ok: false,
+      formError: BOOKING_EMPLOYEE_REQUIRED_MESSAGE,
+    };
+  }
+
   const supabase = await createClient();
   const mergedSpecialRequests = [
     data.specialRequests?.trim() || "",
@@ -241,7 +276,7 @@ export async function createAdminBooking(
 
   revalidatePath("/admin");
   revalidatePath("/admin/bookings");
-  redirect(`/admin/bookings?created=${encodeURIComponent(reference)}`);
+  redirectWithFlash("/admin/bookings", "booking_created", reference);
 }
 
 export async function updateBookingStatus(formData: FormData) {
@@ -292,8 +327,7 @@ export async function updateBookingStatus(formData: FormData) {
     if (!hh || !mm) return null;
     return Number(hh) * 60 + Number(mm);
   };
-  const toCents = (raw: string) =>
-    raw === "" ? 0 : Math.round(Math.max(0, Number(raw) || 0) * 100);
+  const toCents = (raw: string) => phpAmountToCents(raw);
   const supabase = await createClient();
   const bookingRes = await supabase
     .from("bookings")
@@ -338,6 +372,12 @@ export async function updateBookingStatus(formData: FormData) {
   if (!existing) throw new Error("Booking not found.");
   if (existing.status === "cancelled") {
     throw new Error("Cancelled bookings cannot be edited.");
+  }
+
+  const returnTo =
+    String(formData.get("return_to") ?? "").trim() || "/admin/bookings";
+  if (bookingRequiresEmployee(employeeId)) {
+    redirectWithFlashError(returnTo, BOOKING_EMPLOYEE_REQUIRED_MESSAGE);
   }
 
   const templateRes = await supabase
@@ -562,4 +602,6 @@ export async function updateBookingStatus(formData: FormData) {
   revalidatePath("/admin");
   revalidatePath("/admin/bookings");
   revalidatePath(`/admin/bookings/${id}`);
+
+  redirectWithFlash(returnTo, "booking_updated");
 }

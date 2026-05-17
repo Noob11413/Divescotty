@@ -2,7 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { phpAmountToCents } from "@/lib/utils";
 import { customBookingRequestSchema } from "@/lib/validators";
+import { notifyAdminNewBooking } from "@/lib/admin-notifications";
+import {
+  redirectWithFlash,
+  redirectWithFlashErrorFromCatch,
+} from "@/lib/redirect-with-flash";
 
 export interface CreateCustomBookingRequestState {
   ok?: boolean;
@@ -70,10 +76,14 @@ export async function createCustomBookingRequest(
   }
 
   revalidatePath("/admin/custom-bookings");
-  return { ok: true, reference: insertRow.reference };
+  const returnTo =
+    String(formData.get("return_to") ?? "").trim() || "/custom-booking";
+  redirectWithFlash(returnTo, "custom_request_submitted");
 }
 
 export async function updateCustomBookingRequest(formData: FormData) {
+  const path = "/admin/custom-bookings";
+  try {
   const id = String(formData.get("id") ?? "");
   const status = String(formData.get("status") ?? "new");
   const employeeId = String(formData.get("employee_id") ?? "");
@@ -83,9 +93,7 @@ export async function updateCustomBookingRequest(formData: FormData) {
   const quoteExpiresOn = String(formData.get("quote_expires_on") ?? "").trim();
   if (!id) throw new Error("Missing custom booking request id.");
   const quoteAmountCents =
-    quoteAmountRaw === ""
-      ? null
-      : Math.round(Math.max(0, Number(quoteAmountRaw) || 0) * 100);
+    quoteAmountRaw === "" ? null : phpAmountToCents(quoteAmountRaw);
 
   const supabase = await createClient();
   const { error } = await supabase
@@ -106,9 +114,19 @@ export async function updateCustomBookingRequest(formData: FormData) {
 
   revalidatePath("/admin/custom-bookings");
   revalidatePath("/admin");
+  redirectWithFlash(path, "custom_request_updated");
+  } catch (err) {
+    redirectWithFlashErrorFromCatch(
+      path,
+      err,
+      "Could not update custom request.",
+    );
+  }
 }
 
 export async function convertCustomRequestToBooking(formData: FormData) {
+  const path = "/admin/custom-bookings";
+  try {
   const id = String(formData.get("id") ?? "");
   const activityId = String(formData.get("activity_id") ?? "");
   const employeeId = String(formData.get("employee_id") ?? "");
@@ -182,7 +200,40 @@ export async function convertCustomRequestToBooking(formData: FormData) {
     .eq("id", id);
   if (updateReq.error) throw updateReq.error;
 
+  const [{ data: activityRow }, { data: locationRow }] = await Promise.all([
+    supabase.from("activities").select("name").eq("id", activityId).maybeSingle(),
+    locationId
+      ? supabase.from("locations").select("name").eq("id", locationId).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+
+  try {
+    await notifyAdminNewBooking(supabase, {
+      bookingReference: reference,
+      customerName: request.customer_name,
+      customerEmail: request.customer_email,
+      customerPhone: request.customer_phone,
+      activityName: (activityRow as { name?: string } | null)?.name ?? "Activity",
+      preferredDate: preferredDate || new Date().toISOString().slice(0, 10),
+      preferredTime: preferredTime || null,
+      partySize: request.party_size,
+      locationName: (locationRow as { name?: string } | null)?.name ?? null,
+      specialRequests: specialRequests || null,
+      source: "custom_request",
+    });
+  } catch (notifyError) {
+    console.error("Admin new booking notification failed", notifyError);
+  }
+
   revalidatePath("/admin/custom-bookings");
   revalidatePath("/admin/bookings");
   revalidatePath("/admin");
+  redirectWithFlash(path, "custom_request_converted");
+  } catch (err) {
+    redirectWithFlashErrorFromCatch(
+      path,
+      err,
+      "Could not convert custom request.",
+    );
+  }
 }

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { formatPricePHP } from "@/lib/utils";
 
 type ProfitRow = {
   preferredDate: string;
@@ -205,11 +206,7 @@ export function ProfitInsightsBoard({ rows }: { rows: ProfitRow[] }) {
                 total >= 0 ? "text-success" : "text-error"
               }`}
             >
-              {(total / 100).toLocaleString("en-PH", {
-                style: "currency",
-                currency: "PHP",
-                maximumFractionDigits: 0,
-              })}
+              {formatPricePHP(total)}
             </p>
             <p className="mt-2 text-xs text-base-content/60">{selected.label}</p>
           </div>
@@ -226,11 +223,7 @@ export function ProfitInsightsBoard({ rows }: { rows: ProfitRow[] }) {
                   <div key={c.name} className="flex items-center justify-between text-sm">
                     <span className="truncate pr-2">{c.name}</span>
                     <span className={c.cents >= 0 ? "text-success" : "text-error"}>
-                      {(c.cents / 100).toLocaleString("en-PH", {
-                        style: "currency",
-                        currency: "PHP",
-                        maximumFractionDigits: 0,
-                      })}
+                      {formatPricePHP(c.cents)}
                     </span>
                   </div>
                 ))}

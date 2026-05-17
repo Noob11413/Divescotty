@@ -1,19 +1,28 @@
 import Link from "next/link";
 import Image from "next/image";
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { logoutAction } from "@/app/actions/auth";
+import { AdminFlashBanner } from "@/components/admin/AdminFlashBanner";
+import { AdminToastProvider } from "@/components/admin/AdminToastProvider";
+import { AdminNav } from "@/components/admin/AdminNav";
+import { fetchAdminNavCounts } from "@/lib/admin-nav-counts";
 import { createClient } from "@/lib/supabase/server";
 import { LogOut } from "lucide-react";
 
 const NAV = [
-  { label: "Dashboard", href: "/admin" },
-  { label: "Bookings", href: "/admin/bookings" },
-  { label: "Activities", href: "/admin/activities" },
-  { label: "Categories", href: "/admin/categories" },
-  { label: "Locations", href: "/admin/locations" },
-  { label: "Employees", href: "/admin/employees" },
-  { label: "Custom Bookings", href: "/admin/custom-bookings" },
-  { label: "Settings", href: "/admin/settings" },
+  { label: "Dashboard", href: "/admin", countKey: null },
+  { label: "Bookings", href: "/admin/bookings", countKey: "pendingBookings" as const },
+  { label: "Activities", href: "/admin/activities", countKey: null },
+  { label: "Categories", href: "/admin/categories", countKey: null },
+  { label: "Locations", href: "/admin/locations", countKey: null },
+  { label: "Employees", href: "/admin/employees", countKey: null },
+  {
+    label: "Custom Bookings",
+    href: "/admin/custom-bookings",
+    countKey: "newCustomRequests" as const,
+  },
+  { label: "Settings", href: "/admin/settings", countKey: null },
 ];
 
 export default async function AdminLayout({
@@ -42,6 +51,14 @@ export default async function AdminLayout({
   }
   if (role !== "admin") redirect("/");
 
+  const navCounts = await fetchAdminNavCounts(supabase);
+  const navItems = NAV.map((item) => ({
+    label: item.label,
+    href: item.href,
+    badge:
+      item.countKey != null ? navCounts[item.countKey] : undefined,
+  }));
+
   return (
     <div data-theme="scotty-light" className="min-h-screen bg-base-100 text-base-content">
       <header className="border-b border-base-content/10 bg-base-200">
@@ -64,17 +81,7 @@ export default async function AdminLayout({
             </div>
           </Link>
 
-          <nav className="order-3 flex w-full gap-6 overflow-x-auto text-xs uppercase tracking-[0.28em] md:order-2 md:w-auto">
-            {NAV.map((n) => (
-              <Link
-                key={n.href}
-                href={n.href}
-                className="whitespace-nowrap hover:text-primary"
-              >
-                {n.label}
-              </Link>
-            ))}
-          </nav>
+          <AdminNav items={navItems} />
 
           <form action={logoutAction} className="md:order-3">
             <button
@@ -88,9 +95,14 @@ export default async function AdminLayout({
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1600px] px-5 py-10 md:px-8 md:py-12">
-        {children}
-      </main>
+      <AdminToastProvider>
+        <main className="mx-auto max-w-[1600px] px-5 py-10 md:px-8 md:py-12">
+          <Suspense fallback={null}>
+            <AdminFlashBanner />
+          </Suspense>
+          {children}
+        </main>
+      </AdminToastProvider>
     </div>
   );
 }
