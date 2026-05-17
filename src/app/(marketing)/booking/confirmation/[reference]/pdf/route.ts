@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
-import { createClient } from "@/lib/supabase/server";
+import { getClientForBookingDocuments } from "@/lib/booking-document-access";
 import { buildBookingPdf } from "@/lib/booking-pdf";
-import type { Database } from "@/lib/supabase/database.types";
 
 type Params = { reference: string };
 
@@ -20,34 +18,36 @@ export async function GET(
 ) {
   const { reference } = await params;
   const normalizedReference = decodeURIComponent(reference);
-  const supabase = await createClient();
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) {
+
+  const access = await getClientForBookingDocuments();
+  if (!access) {
     return NextResponse.json(
-      { error: "Missing Supabase server configuration." },
-      { status: 500 },
+      {
+        error:
+          "Sign in as admin (same browser) or add SUPABASE_SERVICE_ROLE_KEY to .env.local to download PDFs.",
+      },
+      { status: 401 },
     );
   }
-  const adminSupabase = createSupabaseClient<Database>(url, serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
 
-  const [{ data: booking, error: bookingError }, { data: settings }] = await Promise.all([
-    adminSupabase
-      .from("bookings")
-      .select(
-        "reference, status, payment_status, customer_name, customer_email, customer_phone, party_size, preferred_date, preferred_time, special_requests, quoted_total_cents, quoted_currency, amount_paid_cents, activity:activities(name, price_cents), location:locations(name), employee:employees(name)",
-      )
-      .eq("reference", normalizedReference)
-      .maybeSingle(),
-    supabase
-      .from("site_settings")
-      .select("business_name")
-      .order("updated_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-  ]);
+  const { client: supabase, isAdmin } = access;
+
+  const [{ data: booking, error: bookingError }, { data: settings }] =
+    await Promise.all([
+      supabase
+        .from("bookings")
+        .select(
+          "reference, status, payment_status, customer_name, customer_email, customer_phone, party_size, preferred_date, preferred_time, special_requests, quoted_total_cents, quoted_currency, amount_paid_cents, activity:activities(name, price_cents), location:locations(name), employee:employees(name)",
+        )
+        .eq("reference", normalizedReference)
+        .maybeSingle(),
+      supabase
+        .from("site_settings")
+        .select("business_name")
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
 
   const b = (booking as
     | {
@@ -80,17 +80,27 @@ export async function GET(
   if (!b) {
     return NextResponse.json({ error: "Booking not found." }, { status: 404 });
   }
-  if (b.status !== "confirmed" && b.status !== "completed") {
+
+  if (b.status === "cancelled") {
     return NextResponse.json(
-      { error: "PDF available only after payment confirmation." },
+      { error: "PDF is not available for cancelled bookings." },
       { status: 403 },
     );
   }
-  if (b.payment_status !== "paid") {
-    return NextResponse.json(
-      { error: "Booking confirmation PDF requires paid status." },
-      { status: 403 },
-    );
+
+  if (!isAdmin) {
+    if (b.status !== "confirmed" && b.status !== "completed") {
+      return NextResponse.json(
+        { error: "PDF available only after payment confirmation." },
+        { status: 403 },
+      );
+    }
+    if (b.payment_status !== "paid") {
+      return NextResponse.json(
+        { error: "Booking confirmation PDF requires paid status." },
+        { status: 403 },
+      );
+    }
   }
 
   const activity = Array.isArray(b.activity) ? b.activity[0] : b.activity;

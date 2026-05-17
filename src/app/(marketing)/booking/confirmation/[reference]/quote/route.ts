@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
-import { createClient } from "@/lib/supabase/server";
-import type { Database } from "@/lib/supabase/database.types";
+import { getClientForBookingDocuments } from "@/lib/booking-document-access";
 import { buildQuotationPdf } from "@/lib/quotation-pdf";
 
 type Params = { reference: string };
@@ -12,23 +10,23 @@ export async function GET(
 ) {
   const { reference } = await params;
   const normalizedReference = decodeURIComponent(reference);
-  const supabase = await createClient();
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) {
+
+  const access = await getClientForBookingDocuments();
+  if (!access) {
     return NextResponse.json(
-      { error: "Missing Supabase server configuration." },
-      { status: 500 },
+      {
+        error:
+          "Sign in as admin (same browser) or add SUPABASE_SERVICE_ROLE_KEY to .env.local to download quotations.",
+      },
+      { status: 401 },
     );
   }
 
-  const adminSupabase = createSupabaseClient<Database>(url, serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  const { client: supabase } = access;
 
   const [{ data: booking, error: bookingError }, { data: settings }] =
     await Promise.all([
-      adminSupabase
+      supabase
         .from("bookings")
         .select(
           "reference, customer_name, customer_email, party_size, payment_status, quoted_total_cents, quoted_currency, amount_paid_cents, activity:activities(name, price_cents)",
@@ -46,6 +44,7 @@ export async function GET(
   if (bookingError) {
     return NextResponse.json({ error: bookingError.message }, { status: 500 });
   }
+
   const b = booking as
     | {
         reference: string;
@@ -62,12 +61,14 @@ export async function GET(
           | null;
       }
     | null;
+
   if (!b) {
     return NextResponse.json({ error: "Booking not found." }, { status: 404 });
   }
   if ((b.quoted_total_cents ?? 0) <= 0) {
     return NextResponse.json({ error: "Quotation not generated yet." }, { status: 403 });
   }
+
   const activity = Array.isArray(b.activity) ? b.activity[0] : b.activity;
   const activityName = activity?.name;
   const pricePerPersonCents =

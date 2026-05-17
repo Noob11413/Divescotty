@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
-import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
+import { ChevronDown, ChevronRight, ExternalLink, Loader2 } from "lucide-react";
 import { updateBookingStatus } from "@/app/actions/bookings";
 import type { BookingStatus } from "@/lib/supabase/database.types";
 import { formatPricePHP } from "@/lib/utils";
@@ -90,6 +91,13 @@ const STATUS_STYLES: Record<BookingStatus, string> = {
   cancelled: "bg-error/20 text-error-content border-error/40",
 };
 
+const PAYMENT_STYLES: Record<BookingRowData["payment_status"], string> = {
+  unpaid: "bg-base-200 text-base-content/80 border-base-content/25",
+  partial: "bg-warning/15 text-warning-content border-warning/35",
+  paid: "bg-success/15 text-success-content border-success/35",
+  refunded: "bg-base-300 text-base-content/70 border-base-content/30",
+};
+
 export function BookingRow({
   booking,
   preferredDateLabel,
@@ -153,6 +161,17 @@ export function BookingRow({
         </td>
         <td>
           {isCancelled ? (
+            <span className="text-xs text-base-content/45">—</span>
+          ) : (
+            <span
+              className={`inline-flex items-center border px-2 py-0.5 text-[10px] uppercase tracking-[0.28em] ${PAYMENT_STYLES[booking.payment_status]}`}
+            >
+              {booking.payment_status}
+            </span>
+          )}
+        </td>
+        <td>
+          {isCancelled ? (
             <span className="text-xs uppercase tracking-[0.28em] text-base-content/45">
               Locked
             </span>
@@ -176,7 +195,39 @@ export function BookingRow({
 
       {open && !isCancelled && (
         <tr className="border-t border-base-content/10 bg-base-200/40">
-          <td colSpan={8} className="p-6">
+          <td colSpan={9} className="p-6">
+            <div className="mb-5 flex flex-wrap items-center gap-3 border-b border-base-content/10 pb-4">
+              <p className="text-[10px] uppercase tracking-[0.28em] text-base-content/60">
+                Customer links
+              </p>
+              <Link
+                href={`/booking/confirmation/${booking.reference}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 border border-base-content/30 px-3 py-1.5 text-[10px] uppercase tracking-[0.24em] hover:bg-base-content hover:text-base-100"
+              >
+                Confirmation
+                <ExternalLink className="h-3 w-3" />
+              </Link>
+              <Link
+                href={`/booking/confirmation/${booking.reference}/pdf`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 border border-base-content/30 px-3 py-1.5 text-[10px] uppercase tracking-[0.24em] hover:bg-base-content hover:text-base-100"
+              >
+                PDF
+                <ExternalLink className="h-3 w-3" />
+              </Link>
+              <Link
+                href={`/booking/confirmation/${booking.reference}/quote`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 border border-base-content/30 px-3 py-1.5 text-[10px] uppercase tracking-[0.24em] hover:bg-base-content hover:text-base-100"
+              >
+                Quote
+                <ExternalLink className="h-3 w-3" />
+              </Link>
+            </div>
             <form
               action={(formData) =>
                 startTransition(() => updateBookingStatus(formData))

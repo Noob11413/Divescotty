@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { getSupabasePublicConfig } from "@/lib/supabase/env";
 
 /**
  * Typed as `any` until `npm run supabase:types` overwrites `database.types.ts`.
@@ -7,6 +8,7 @@ import { cookies } from "next/headers";
  * `GenericSchema` constraints, which collapses query results to `never`.
  */
 export async function createClient() {
+  const { url, anonKey } = getSupabasePublicConfig();
   const cookieStore = await cookies();
   type CookieToSet = {
     name: string;
@@ -15,10 +17,7 @@ export async function createClient() {
   };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- see module comment above
-  return createServerClient<any, "public", any>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
+  return createServerClient<any, "public", any>(url, anonKey, {
       cookies: {
         getAll() {
           return cookieStore.getAll();

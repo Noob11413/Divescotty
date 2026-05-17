@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { getSupabasePublicConfig } from "@/lib/supabase/env";
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -9,11 +10,9 @@ export async function updateSession(request: NextRequest) {
     options?: Parameters<NextResponse["cookies"]["set"]>[2];
   };
 
+  const { url, anonKey } = getSupabasePublicConfig();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- see server.ts
-  const supabase = createServerClient<any, "public", any>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
+  const supabase = createServerClient<any, "public", any>(url, anonKey, {
       cookies: {
         getAll() {
           return request.cookies.getAll();

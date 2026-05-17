@@ -3,8 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { bookingFormSchema } from "@/lib/validators";
-import { sendBookingConfirmationEmail } from "@/lib/booking-confirmation-email";
+import { parseEndTimeFromSpecialRequests } from "@/lib/booking-time";
+import {
+  sendBookingConfirmationEmail,
+  sendBookingStatusUpdateEmail,
+} from "@/lib/booking-confirmation-email";
+import { adminBookingFormSchema, bookingFormSchema } from "@/lib/validators";
 
 export interface CreateBookingState {
   ok?: boolean;
@@ -112,6 +116,134 @@ export async function createBooking(
   redirect(`/booking/confirmation/${reference}`);
 }
 
+export interface AdminCreateBookingState {
+  ok?: boolean;
+  reference?: string;
+  fieldErrors?: Record<string, string>;
+  formError?: string;
+}
+
+export async function createAdminBooking(
+  _prevState: AdminCreateBookingState,
+  formData: FormData,
+): Promise<AdminCreateBookingState> {
+  const raw = {
+    activityId: String(formData.get("activityId") ?? ""),
+    employeeId: (formData.get("employeeId") as string | null) || null,
+    locationId: (formData.get("locationId") as string | null) || null,
+    customerName: String(formData.get("customerName") ?? ""),
+    customerEmail: String(formData.get("customerEmail") ?? ""),
+    customerPhone: String(formData.get("customerPhone") ?? ""),
+    partySize: Number(formData.get("partySize") ?? 2),
+    preferredDate: String(formData.get("preferredDate") ?? ""),
+    preferredTime: (formData.get("preferredTime") as string | null) ?? "",
+    preferredTimeEnd: (formData.get("preferredTimeEnd") as string | null) ?? "",
+    specialRequests: (formData.get("specialRequests") as string | null) ?? "",
+    initialStatus: String(formData.get("initialStatus") ?? "pending"),
+  };
+
+  const parsed = adminBookingFormSchema.safeParse(raw);
+  if (!parsed.success) {
+    const fieldErrors: Record<string, string> = {};
+    for (const issue of parsed.error.issues) {
+      const key = issue.path[0]?.toString();
+      if (key && !fieldErrors[key]) fieldErrors[key] = issue.message;
+    }
+    return { ok: false, fieldErrors };
+  }
+
+  const data = parsed.data;
+  const supabase = await createClient();
+  const mergedSpecialRequests = [
+    data.specialRequests?.trim() || "",
+    data.preferredTimeEnd ? `End time: ${data.preferredTimeEnd}` : "",
+  ]
+    .filter(Boolean)
+    .join(" | ");
+
+  const insert = await supabase.rpc("create_booking_request", {
+    p_activity_id: data.activityId,
+    p_employee_id: data.employeeId || null,
+    p_location_id: data.locationId || null,
+    p_customer_name: data.customerName,
+    p_customer_email: data.customerEmail,
+    p_customer_phone: data.customerPhone,
+    p_party_size: data.partySize,
+    p_preferred_date: data.preferredDate,
+    p_preferred_time: data.preferredTime || null,
+    p_special_requests: mergedSpecialRequests || null,
+  });
+
+  const reference = insert.data as string | null;
+  if (insert.error || !reference) {
+    return {
+      ok: false,
+      formError:
+        insert.error?.message ??
+        "Could not create booking. Check activity and try again.",
+    };
+  }
+
+  const [{ data: bookingRow }, { data: activityRow }, { data: locationRow }] =
+    await Promise.all([
+      supabase.from("bookings").select("id").eq("reference", reference).maybeSingle(),
+      supabase
+        .from("activities")
+        .select("name")
+        .eq("id", data.activityId)
+        .maybeSingle(),
+      data.locationId
+        ? supabase
+            .from("locations")
+            .select("name")
+            .eq("id", data.locationId)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
+
+  const bookingId = (bookingRow as { id?: string } | null)?.id;
+  if (data.initialStatus === "confirmed" && bookingId) {
+    await supabase
+      .from("bookings")
+      .update({ status: "confirmed" })
+      .eq("id", bookingId);
+  }
+
+  const emailPayload = {
+    bookingReference: reference,
+    customerName: data.customerName,
+    customerEmail: data.customerEmail,
+    customerPhone: data.customerPhone,
+    activityName: activityRow?.name ?? "Activity",
+    preferredDate: data.preferredDate,
+    preferredTime: data.preferredTime || null,
+    preferredTimeEnd: data.preferredTimeEnd || null,
+    partySize: data.partySize,
+    locationName: locationRow?.name ?? null,
+    specialRequests: mergedSpecialRequests || null,
+  };
+
+  try {
+    if (data.initialStatus === "confirmed") {
+      await sendBookingStatusUpdateEmail({
+        ...emailPayload,
+        status: "confirmed",
+      });
+    } else {
+      await sendBookingConfirmationEmail({
+        ...emailPayload,
+        bookingStatusLabel: "Pending",
+      });
+    }
+  } catch (emailError) {
+    console.error("Admin booking email failed", emailError);
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/bookings");
+  redirect(`/admin/bookings?created=${encodeURIComponent(reference)}`);
+}
+
 export async function updateBookingStatus(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const status = String(formData.get("status") ?? "");
@@ -166,22 +298,41 @@ export async function updateBookingStatus(formData: FormData) {
   const bookingRes = await supabase
     .from("bookings")
     .select(
-      "status, activity_id, party_size, preferred_time, special_requests, activity:activities(price_cents)",
+      `
+      reference,
+      status,
+      customer_name,
+      customer_email,
+      customer_phone,
+      preferred_date,
+      activity_id,
+      party_size,
+      preferred_time,
+      special_requests,
+      activity:activities(name, price_cents),
+      location:locations(name)
+    `,
     )
     .eq("id", id)
     .maybeSingle();
   if (bookingRes.error) throw bookingRes.error;
   const existing = bookingRes.data as
     | {
+        reference: string;
         status: "pending" | "confirmed" | "cancelled" | "completed";
+        customer_name: string;
+        customer_email: string;
+        customer_phone: string;
+        preferred_date: string;
         activity_id: string;
         party_size: number;
         preferred_time: string | null;
         special_requests: string | null;
         activity?:
-          | { price_cents?: number | null }
-          | Array<{ price_cents?: number | null }>
+          | { name?: string | null; price_cents?: number | null }
+          | Array<{ name?: string | null; price_cents?: number | null }>
           | null;
+        location?: { name?: string | null } | Array<{ name?: string | null }> | null;
       }
     | null;
   if (!existing) throw new Error("Booking not found.");
@@ -373,6 +524,40 @@ export async function updateBookingStatus(formData: FormData) {
     .eq("id", id);
 
   if (error) throw error;
+
+  const nextStatus = status as "pending" | "confirmed" | "cancelled" | "completed";
+  const prevStatus = existing.status;
+  if (
+    nextStatus !== prevStatus &&
+    (nextStatus === "confirmed" || nextStatus === "cancelled")
+  ) {
+    const activityName = Array.isArray(existing.activity)
+      ? existing.activity[0]?.name
+      : existing.activity?.name;
+    const locationName = Array.isArray(existing.location)
+      ? existing.location[0]?.name
+      : existing.location?.name;
+    const special =
+      payload.special_requests ?? existing.special_requests;
+    try {
+      await sendBookingStatusUpdateEmail({
+        bookingReference: existing.reference,
+        customerName: existing.customer_name,
+        customerEmail: existing.customer_email,
+        customerPhone: existing.customer_phone,
+        activityName: activityName ?? "Activity",
+        preferredDate: existing.preferred_date,
+        preferredTime: payload.preferred_time ?? existing.preferred_time,
+        preferredTimeEnd: parseEndTimeFromSpecialRequests(special),
+        partySize: existing.party_size,
+        locationName: locationName ?? null,
+        specialRequests: special,
+        status: nextStatus,
+      });
+    } catch (emailError) {
+      console.error("Booking status email failed", emailError);
+    }
+  }
 
   revalidatePath("/admin");
   revalidatePath("/admin/bookings");

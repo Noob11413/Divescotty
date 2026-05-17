@@ -48,6 +48,14 @@ export const bookingFormSchema = z.object({
 
 export type BookingFormInput = z.infer<typeof bookingFormSchema>;
 
+/** Admin walk-in / phone bookings — same fields, relaxed date rules + optional initial status. */
+export const adminBookingFormSchema = bookingFormSchema.extend({
+  preferredDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a valid date"),
+  initialStatus: z.enum(["pending", "confirmed"]).default("pending"),
+});
+
+export type AdminBookingFormInput = z.infer<typeof adminBookingFormSchema>;
+
 export const customBookingRequestSchema = z.object({
   customerName: z.string().trim().min(2, "Please enter your full name").max(120),
   customerEmail: z.string().trim().toLowerCase().email("Enter a valid email"),
